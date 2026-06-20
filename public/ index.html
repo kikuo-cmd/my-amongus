@@ -25,29 +25,13 @@
     let keys = {};
     const speed = 4;
 
-    // サーバーから全プレイヤー情報を取得
-    socket.on('currentPlayers', (serverPlayers) => {
-      players = serverPlayers;
-    });
+    socket.on('currentPlayers', (serverPlayers) => { players = serverPlayers; });
+    socket.on('playerMoved', (playerInfo) => { if (players[playerInfo.id]) { players[playerInfo.id].x = playerInfo.x; players[playerInfo.id].y = playerInfo.y; } });
+    socket.on('playerDisconnected', (id) => { delete players[id]; });
 
-    // 他のプレイヤーが動いたとき
-    socket.on('playerMoved', (playerInfo) => {
-      if (players[playerInfo.id]) {
-        players[playerInfo.id].x = playerInfo.x;
-        players[playerInfo.id].y = playerInfo.y;
-      }
-    });
-
-    // 誰かが抜けたとき
-    socket.on('playerDisconnected', (id) => {
-      delete players[id];
-    });
-
-    // キーボード入力検知
     window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
     window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
-    // スマホ用タップ入力
     let targetX = null, targetY = null;
     canvas.addEventListener('touchstart', handleTouch);
     canvas.addEventListener('touchmove', handleTouch);
@@ -59,66 +43,36 @@
       targetY = (e.touches[0].clientY - rect.top) * (canvas.height / rect.height);
     }
 
-    // ゲームループ（描画と更新）
     function update() {
       if (!players[socket.id]) return;
-
       let moved = false;
       let me = players[socket.id];
 
-      // キーボード移動
       if (keys['arrowup'] || keys['w']) { me.y -= speed; moved = true; }
       if (keys['arrowdown'] || keys['s']) { me.y += speed; moved = true; }
       if (keys['arrowleft'] || keys['a']) { me.x -= speed; moved = true; }
       if (keys['arrowright'] || keys['d']) { me.x += speed; moved = true; }
 
-      // タップ移動
       if (targetX !== null && targetY !== null) {
-        let dx = targetX - me.x;
-        let dy = targetY - me.y;
-        let dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 5) {
-          me.x += (dx / dist) * speed;
-          me.y += (dy / dist) * speed;
-          moved = true;
-        }
+        let dx = targetX - me.x; let dy = targetY - me.y; let dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 5) { me.x += (dx / dist) * speed; me.y += (dy / dist) * speed; moved = true; }
       }
 
-      // 画面外に出ないように制限
       me.x = Math.max(15, Math.min(canvas.width - 15, me.x));
       me.y = Math.max(15, Math.min(canvas.height - 15, me.y));
 
-      // 動いたらサーバーに通知
-      if (moved) {
-        socket.emit('playerMovement', { x: me.x, y: me.y });
-      }
+      if (moved) { socket.emit('playerMovement', { x: me.x, y: me.y }); }
 
-      // 描画処理
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // 全プレイヤーを描画
       for (let id in players) {
         let p = players[id];
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 15, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.closePath();
+        ctx.beginPath(); ctx.arc(p.x, p.y, 15, 0, Math.PI * 2); ctx.fillStyle = p.color; ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke(); ctx.closePath();
 
-        // 自分に「YOU」と表示
-        if (id === socket.id) {
-          ctx.fillStyle = '#fff';
-          ctx.font = '12px sans-serif';
-          ctx.fillText('YOU', p.x - 12, p.y - 22);
-        }
+        if (id === socket.id) { ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif'; ctx.fillText('YOU', p.x - 12, p.y - 22); }
       }
-
       requestAnimationFrame(update);
     }
-
     requestAnimationFrame(update);
   </script>
 </body>
